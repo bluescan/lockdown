@@ -34,11 +34,8 @@ Release/
 
 *.user
 
-!Lockdown.vcxproj.user
-
 *.aps
 
 *.iobj
 
 *.ipdb
-/resource.h
