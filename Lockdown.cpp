@@ -25,6 +25,7 @@
 #include <stdio.h>
 #pragma warning(disable: 4996)
 
+
 #define LockdownVersion "V 1.0.1"
 #define	WM_USER_TRAYICON (WM_USER+1)
 
@@ -33,7 +34,6 @@ namespace Lockdown
 {
 	HINSTANCE hInst;
 	NOTIFYICONDATA NotifyIconData;
-	UINT TaskbarCreatedMsg					= 0;
 	HHOOK hKeyboardHook						= NULL;
 	HHOOK hMouseHook						= NULL;
 
@@ -48,18 +48,14 @@ namespace Lockdown
 
 LRESULT CALLBACK Lockdown::MainWinProc(HWND hwnd, UINT message, WPARAM wparam, LPARAM lparam)
 {
-	if (message == TaskbarCreatedMsg)
-	{
-		// Display tray icon.
-		if (!Shell_NotifyIcon(NIM_ADD, &NotifyIconData))
-		{
-			DestroyWindow(hwnd);
-			return -1;
-		}
-	}
+	static UINT taskbarRestart = 0;
 
 	switch (message)
 	{
+		case WM_CREATE:
+			taskbarRestart = RegisterWindowMessage(TEXT("TaskbarCreated"));
+			break;
+
 		case WM_DESTROY:
 			Shell_NotifyIcon(NIM_DELETE, &NotifyIconData);
 			PostQuitMessage(0);
@@ -153,9 +149,19 @@ LRESULT CALLBACK Lockdown::MainWinProc(HWND hwnd, UINT message, WPARAM wparam, L
 			break;
 
 		default:
-			return DefWindowProc(hwnd, message, wparam, lparam);
+			if (message == taskbarRestart)
+			{
+				if (!Shell_NotifyIcon(NIM_ADD, &NotifyIconData))
+				{
+					// Maybe it will work later? Lets not destroy quite yet.
+					// DestroyWindow(hwnd);
+					// return -1;
+				}
+			}
+			break;
 	}
-	return 0;
+
+	return DefWindowProc(hwnd, message, wparam, lparam);
 }
 
 
@@ -197,7 +203,6 @@ int WINAPI WinMain(HINSTANCE hinstance, HINSTANCE hprevInstance, LPSTR cmdLine, 
 		}
 	}
 
-	Lockdown::TaskbarCreatedMsg	= RegisterWindowMessage(_T("TaskbarCreated"));
 	Lockdown::hKeyboardHook		= SetWindowsHookEx(WH_KEYBOARD_LL,	Lockdown::KeyboardHook,	NULL, 0);
 	Lockdown::hMouseHook		= SetWindowsHookEx(WH_MOUSE_LL,		Lockdown::MouseHook,	NULL, 0);
 
@@ -208,7 +213,7 @@ int WINAPI WinMain(HINSTANCE hinstance, HINSTANCE hprevInstance, LPSTR cmdLine, 
 	comControls.dwSize		= sizeof(comControls);
 	comControls.dwICC		= ICC_UPDOWN_CLASS | ICC_LISTVIEW_CLASSES;
 	if (!InitCommonControlsEx(&comControls))
-		return 0;
+		return 1;
 
 	WNDCLASSEX winClass;
 	memset(&winClass, 0, sizeof(winClass));
@@ -225,7 +230,7 @@ int WINAPI WinMain(HINSTANCE hinstance, HINSTANCE hprevInstance, LPSTR cmdLine, 
 	winClass.lpszClassName		= "Lockdown";
 	winClass.hIconSm			= LoadIcon(hinstance, (LPCTSTR)MAKEINTRESOURCE(IDI_LOCKDOWN_ICON));
 	if (!RegisterClassEx(&winClass))
-		return 0;
+		return 2;
 
 	HWND hwnd = CreateWindowEx
 	(
@@ -235,7 +240,7 @@ int WINAPI WinMain(HINSTANCE hinstance, HINSTANCE hprevInstance, LPSTR cmdLine, 
 	);
 
 	if (!hwnd)
-		return 0;
+		return 3;
 
 	// System tray icon.
 	memset(&Lockdown::NotifyIconData, 0, sizeof(Lockdown::NotifyIconData));
@@ -252,7 +257,7 @@ int WINAPI WinMain(HINSTANCE hinstance, HINSTANCE hprevInstance, LPSTR cmdLine, 
 	Lockdown::NotifyIconData.uCallbackMessage = WM_USER_TRAYICON;
 
 	if (!Shell_NotifyIcon(NIM_ADD, &Lockdown::NotifyIconData))
-		return 0;
+		return 4;
 
 	// Send a timer message every second.
 	SetTimer(hwnd, 42, 1000, NULL);
@@ -264,5 +269,5 @@ int WINAPI WinMain(HINSTANCE hinstance, HINSTANCE hprevInstance, LPSTR cmdLine, 
 		DispatchMessage(&msg);
 	}
 
-	return msg.wParam;
+	return 0;
 }
