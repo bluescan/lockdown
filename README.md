@@ -17,6 +17,7 @@ Consider running as a scheduled task on logon.
 
 
 An optional single integer command line parameter may be given to specify the number of minutes. No parameter means 20 minutes is used. The countdown resets on key-presses and mouse button clicks. Mouse movement alone is NOT considered and will not reset the timer.
+
 ![Lockdown](https://raw.githubusercontent.com/bluescan/lockdown/master/Screenshots/LockdownTaskActions.png)
 
 
