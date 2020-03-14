@@ -36,6 +36,7 @@ namespace Lockdown
 	NOTIFYICONDATA NotifyIconData;
 	HHOOK hKeyboardHook						= NULL;
 	HHOOK hMouseHook						= NULL;
+	BOOL NotifyIconAdded					= 0;
 
 	int SecondsToLock						= 20 * 60;
 	int CountdownSeconds					= SecondsToLock;
@@ -57,17 +58,25 @@ LRESULT CALLBACK Lockdown::MainWinProc(HWND hwnd, UINT message, WPARAM wparam, L
 			break;
 
 		case WM_DESTROY:
-			Shell_NotifyIcon(NIM_DELETE, &NotifyIconData);
+			if (NotifyIconAdded)
+				Shell_NotifyIcon(NIM_DELETE, &NotifyIconData);
 			PostQuitMessage(0);
 			break;
 
 		case WM_TIMER:
 		{
+			if (!NotifyIconAdded)
+				NotifyIconAdded = Shell_NotifyIcon(NIM_ADD, &NotifyIconData);
+
 			CountdownSeconds--;
 			int mins = CountdownSeconds / 60;
 			int secs = CountdownSeconds % 60;
-			sprintf(NotifyIconData.szTip, "Lock in %02d:%02d", mins, secs);
-			Shell_NotifyIcon(NIM_MODIFY, &NotifyIconData);
+
+			if (NotifyIconAdded)
+			{
+				sprintf(NotifyIconData.szTip, "Lock in %02d:%02d", mins, secs);
+				Shell_NotifyIcon(NIM_MODIFY, &NotifyIconData);
+			}
 
 			if (CountdownSeconds <= 0)
 			{
@@ -151,12 +160,7 @@ LRESULT CALLBACK Lockdown::MainWinProc(HWND hwnd, UINT message, WPARAM wparam, L
 		default:
 			if (message == taskbarRestart)
 			{
-				if (!Shell_NotifyIcon(NIM_ADD, &NotifyIconData))
-				{
-					// Maybe it will work later? Lets not destroy quite yet.
-					// DestroyWindow(hwnd);
-					// return -1;
-				}
+				NotifyIconAdded = Shell_NotifyIcon(NIM_ADD, &NotifyIconData);
 			}
 			break;
 	}
@@ -256,8 +260,7 @@ int WINAPI WinMain(HINSTANCE hinstance, HINSTANCE hprevInstance, LPSTR cmdLine, 
 	Lockdown::NotifyIconData.hIcon = LoadIcon(hinstance, (LPCTSTR)MAKEINTRESOURCE(IDI_LOCKDOWN_ICON));
 	Lockdown::NotifyIconData.uCallbackMessage = WM_USER_TRAYICON;
 
-	if (!Shell_NotifyIcon(NIM_ADD, &Lockdown::NotifyIconData))
-		return 4;
+	Lockdown::NotifyIconAdded = Shell_NotifyIcon(NIM_ADD, &Lockdown::NotifyIconData);
 
 	// Send a timer message every second.
 	SetTimer(hwnd, 42, 1000, NULL);
