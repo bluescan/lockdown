@@ -65,9 +65,10 @@ BEGIN
     POPUP ""
     BEGIN
         MENUITEM "About",                       ID_MENU_ABOUT
-        MENUITEM "Quit",                        ID_MENU_QUIT
+        MENUITEM "Enabled",                     ID_MENU_ENABLED, CHECKED
         MENUITEM "Lock In 10 Seconds",          ID_MENU_LOCK10
         MENUITEM "Lock Now",                    ID_MENU_LOCKNOW
+        MENUITEM "Quit",                        ID_MENU_QUIT
     END
 END
 

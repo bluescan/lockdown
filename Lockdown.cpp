@@ -26,7 +26,7 @@
 #pragma warning(disable: 4996)
 
 
-#define LockdownVersion "V 1.0.1"
+#define LockdownVersion "V 1.0.2"
 #define	WM_USER_TRAYICON (WM_USER+1)
 
 
@@ -38,8 +38,11 @@ namespace Lockdown
 	HHOOK hMouseHook						= NULL;
 	BOOL NotifyIconAdded					= 0;
 
+	BOOL Enabled							= 1;
 	int SecondsToLock						= 20 * 60;
+	int MaxDisabledSeconds					= 3 * 60 * 60;			// 3 hour max disable time.
 	int CountdownSeconds					= SecondsToLock;
+	int CountdownDisabled					= MaxDisabledSeconds;
 
 	LRESULT CALLBACK MainWinProc(HWND hwnd, UINT message, WPARAM, LPARAM);
 	LRESULT CALLBACK KeyboardHook(int code, WPARAM, LPARAM);
@@ -68,7 +71,17 @@ LRESULT CALLBACK Lockdown::MainWinProc(HWND hwnd, UINT message, WPARAM wparam, L
 			if (!NotifyIconAdded)
 				NotifyIconAdded = Shell_NotifyIcon(NIM_ADD, &NotifyIconData);
 
-			CountdownSeconds--;
+			if (Enabled)
+			{
+				CountdownSeconds--;
+			}
+			else
+			{
+				CountdownDisabled--;
+				if (CountdownDisabled <= 0)
+					Enabled = 1;
+			}
+
 			int mins = CountdownSeconds / 60;
 			int secs = CountdownSeconds % 60;
 
@@ -104,6 +117,11 @@ LRESULT CALLBACK Lockdown::MainWinProc(HWND hwnd, UINT message, WPARAM wparam, L
 						DestroyMenu(hmenu);
 						return -1;
 					}
+
+					if (Enabled)
+						CheckMenuItem(hmenu, ID_MENU_ENABLED, MF_BYCOMMAND | MF_CHECKED);
+					else
+						CheckMenuItem(hmenu, ID_MENU_ENABLED, MF_BYCOMMAND | MF_UNCHECKED);
 
 					SetForegroundWindow(hwnd);
 					TrackPopupMenu(hsubMenu, TPM_LEFTALIGN | TPM_LEFTBUTTON | TPM_BOTTOMALIGN, cursorPos.x, cursorPos.y, 0, hwnd, NULL);
@@ -147,13 +165,34 @@ LRESULT CALLBACK Lockdown::MainWinProc(HWND hwnd, UINT message, WPARAM wparam, L
 				}
 
 				case ID_MENU_LOCK10:
+					Enabled = 1;
 					CountdownSeconds = 10;
 					break;
 
-				case ID_MENU_LOCKNOW:
-					LockWorkStation();
+				case ID_MENU_ENABLED:
+					// If about to toggle off print a warning.
+					if (Enabled)
+					{
+						int result = ::MessageBox
+						(
+							hwnd,
+							"Please confirm you want to disable lockdown.\n\n"
+							"Pressing OK will disable auto locking for 3 hours.\n"
+							"Pressing Cancel will leave lockdown enabled.\n\n",
+							"Disable Lockdown?", MB_OKCANCEL | MB_ICONQUESTION
+						);
+						if (result == IDOK)
+						{
+							CountdownDisabled = MaxDisabledSeconds;
+							Enabled = 0;
+						}
+					}
 					break;
 
+				case ID_MENU_LOCKNOW:
+					Enabled = 1;
+					LockWorkStation();
+					break;
 			}
 			break;
 
@@ -261,6 +300,8 @@ int WINAPI WinMain(HINSTANCE hinstance, HINSTANCE hprevInstance, LPSTR cmdLine, 
 	Lockdown::NotifyIconData.uCallbackMessage = WM_USER_TRAYICON;
 
 	Lockdown::NotifyIconAdded = Shell_NotifyIcon(NIM_ADD, &Lockdown::NotifyIconData);
+
+	Lockdown::Enabled = 1;
 
 	// Send a timer message every second.
 	SetTimer(hwnd, 42, 1000, NULL);
