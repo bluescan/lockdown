@@ -87,7 +87,10 @@ LRESULT CALLBACK Lockdown::MainWinProc(HWND hwnd, UINT message, WPARAM wparam, L
 
 			if (NotifyIconAdded)
 			{
-				sprintf(NotifyIconData.szTip, "Lock in %02d:%02d", mins, secs);
+				if (Enabled)
+					sprintf(NotifyIconData.szTip, "Lock in %02d:%02d", mins, secs);
+				else
+					sprintf(NotifyIconData.szTip, "Lockdown Disabled");
 				Shell_NotifyIcon(NIM_MODIFY, &NotifyIconData);
 			}
 
@@ -186,6 +189,10 @@ LRESULT CALLBACK Lockdown::MainWinProc(HWND hwnd, UINT message, WPARAM wparam, L
 							CountdownDisabled = MaxDisabledSeconds;
 							Enabled = 0;
 						}
+					}
+					else
+					{
+						Enabled = 1;
 					}
 					break;
 
@@ -294,6 +301,7 @@ int WINAPI WinMain(HINSTANCE hinstance, HINSTANCE hprevInstance, LPSTR cmdLine, 
 
 	int mins = Lockdown::CountdownSeconds / 60;
 	int secs = Lockdown::CountdownSeconds % 60;
+	Lockdown::Enabled = 1;
 	sprintf(Lockdown::NotifyIconData.szTip, "Lock in %02d:%02d", mins, secs);
 
 	Lockdown::NotifyIconData.hIcon = LoadIcon(hinstance, (LPCTSTR)MAKEINTRESOURCE(IDI_LOCKDOWN_ICON));
@@ -301,7 +309,6 @@ int WINAPI WinMain(HINSTANCE hinstance, HINSTANCE hprevInstance, LPSTR cmdLine, 
 
 	Lockdown::NotifyIconAdded = Shell_NotifyIcon(NIM_ADD, &Lockdown::NotifyIconData);
 
-	Lockdown::Enabled = 1;
 
 	// Send a timer message every second.
 	SetTimer(hwnd, 42, 1000, NULL);
