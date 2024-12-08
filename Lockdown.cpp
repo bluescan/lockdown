@@ -4,7 +4,7 @@
 // it seems sometimes setting a screensaver timeout does not reliably lock the machine.
 // This simple system-tray app will hopefully be more reliable.
 //
-// Copyright (c) 2020 Tristan Grimmer.
+// Copyright (c) 2020, 2024 Tristan Grimmer.
 //
 // Permission to use, copy, modify, and/or distribute this software for any
 // purpose with or without fee is hereby granted, provided that the above
@@ -26,7 +26,7 @@
 #pragma warning(disable: 4996)
 
 
-#define LockdownVersion "V 1.0.2"
+#define LockdownVersion "V 1.0.3"
 #define	WM_USER_TRAYICON (WM_USER+1)
 
 
@@ -236,12 +236,26 @@ LRESULT CALLBACK Lockdown::MouseHook(int code, WPARAM wparam, LPARAM lparam)
 		CountdownSeconds = SecondsToLock;
 	}
 
+	if
+		(
+			(wparam == WM_MOUSEMOVE)
+		)
+	{
+		// CountdownSeconds = SecondsToLock;
+	}
+
 	return CallNextHookEx(hKeyboardHook, code, wparam, lparam);
 }
 
 
 int WINAPI WinMain(HINSTANCE hinstance, HINSTANCE hprevInstance, LPSTR cmdLine, int cmdShow)
 {
+	// If one is already running, do not start another.
+	LPCTSTR OtherWindowName = "LockdownTrayWindowName";
+	HWND otherFoundWindowHandle = FindWindow(NULL, OtherWindowName);
+	if (otherFoundWindowHandle)
+		return -1;
+
 	Lockdown::CountdownSeconds = Lockdown::SecondsToLock;
 	if (cmdLine && strlen(cmdLine) > 0)
 	{
@@ -277,16 +291,16 @@ int WINAPI WinMain(HINSTANCE hinstance, HINSTANCE hprevInstance, LPSTR cmdLine, 
 	winClass.hCursor			= LoadCursor(NULL, IDC_ARROW);
 	winClass.hbrBackground		= (HBRUSH)GetStockObject(WHITE_BRUSH);
 	winClass.lpszMenuName		= NULL;
-	winClass.lpszClassName		= "Lockdown";
+	winClass.lpszClassName		= "LockdownTrayClass";
 	winClass.hIconSm			= LoadIcon(hinstance, (LPCTSTR)MAKEINTRESOURCE(IDI_LOCKDOWN_ICON));
 	if (!RegisterClassEx(&winClass))
 		return 2;
 
 	HWND hwnd = CreateWindowEx
 	(
-		WS_EX_CLIENTEDGE,	"Lockdown",			"Lockdown",		WS_OVERLAPPEDWINDOW,
-		CW_USEDEFAULT,		CW_USEDEFAULT,		CW_USEDEFAULT,	CW_USEDEFAULT,
-		NULL,				NULL,				hinstance,		NULL
+		WS_EX_CLIENTEDGE,	"LockdownTrayClass",	"LockdownTrayWindowName",		WS_OVERLAPPEDWINDOW,
+		CW_USEDEFAULT,		CW_USEDEFAULT,			CW_USEDEFAULT,					CW_USEDEFAULT,
+		NULL,				NULL,					hinstance,						NULL
 	);
 
 	if (!hwnd)
