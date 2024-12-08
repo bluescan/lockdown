@@ -1,41 +1,39 @@
-.vs/*
+# Every directory with the name.
+.vs/
+build*/
 
-Debug/
+# Ignore specific directories.
+# /Screenshots/SampleImages/
 
-Release/
+# Filetypes in directories.
+# TestImages/Exrs/
 
+# Specific Files.
+.vscode/settings.json
+.vscode/c_cpp_properties.json
+
+
+# Filetypes to ignore everywhere.
 *.log
-
 *.tlog
-
 *.obj
-
-*.lib
-
-*.idb
-
-*.pdb
-
-*.ilk
-
-*.exe
-
+*.o
+*.cpp.o
+*.cpp.o.d
+*.suo
 *.db
-
 *.db-shm
-
 *.db-wal
-
 *.exp
-
-*.ipch
-
-*.opendb
-
-*.user
-
-*.aps
-
 *.iobj
-
 *.ipdb
+*.tags
+*.session
+*.c.o
+*.cxx.o
+*.tac
+*.zip
+*.snap
+
+# Specific filetypes that have exceptions here or in subdirs.
+*.vcxproj.user
