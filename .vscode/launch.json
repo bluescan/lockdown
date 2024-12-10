@@ -1,0 +1,16 @@
+{
+	"configurations": [
+		{
+			"name": "Launch Windows",
+			"type": "cppvsdbg",
+			"request": "launch",
+			// "program": "${workspaceFolder}/build/ViewerInstall/tacentview.exe",
+			"program": "${command:cmake.buildDirectory}/lockdown.exe",
+			"args": [],
+			"stopAtEntry": false,
+			"cwd": "${command:cmake.buildDirectory}",
+			"environment": [],
+			"console": "integratedTerminal",
+		}
+	]
+}

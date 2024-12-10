@@ -23,11 +23,13 @@
 #define LGP_LOG_PREFIX ""
 #endif
 
-#if DEBUG
-#define gdebug(format, ...) gamepad::log(gamepad::LOG_DEBUG, LGP_LOG_PREFIX format, ##__VA_ARGS__)
-#else
+// Begin Bluescan Divergence
+//#if DEBUG
+//#define gdebug(format, ...) gamepad::log(gamepad::LOG_DEBUG, LGP_LOG_PREFIX format, ##__VA_ARGS__)
+//#else
 #define gdebug(format, ...) LGP_UNUSED(format)
-#endif
+//#endif
+// End Bluescan Divergence
 
 #define ginfo(format, ...) gamepad::log(gamepad::LOG_INFO, LGP_LOG_PREFIX format, ##__VA_ARGS__)
 #define gwarn(format, ...) gamepad::log(gamepad::LOG_WARNING, LGP_LOG_PREFIX format, ##__VA_ARGS__)

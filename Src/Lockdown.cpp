@@ -19,10 +19,11 @@
 // PERFORMANCE OF THIS SOFTWARE.
 
 #include <windows.h>
+#include <System/tPrint.h>
 #include <tchar.h>
 #include <commctrl.h>
 #include "resource.h"
-#include <stdio.h>
+#include <libgamepad.hpp>
 #pragma warning(disable: 4996)
 
 
@@ -47,6 +48,22 @@ namespace Lockdown
 	LRESULT CALLBACK MainWinProc(HWND hwnd, UINT message, WPARAM, LPARAM);
 	LRESULT CALLBACK KeyboardHook(int code, WPARAM, LPARAM);
 	LRESULT CALLBACK MouseHook(int code, WPARAM, LPARAM);
+
+	// Gamepad hooks.
+	void button_handler(std::shared_ptr<gamepad::device>);
+	void axis_handler(std::shared_ptr<gamepad::device>);
+	void connect_handler(std::shared_ptr<gamepad::device>);
+	void disconnect_handler(std::shared_ptr<gamepad::device>);
+
+	enum ExitCode
+	{
+		ExitCode_Success,
+		ExitCode_AlreadyRunning,
+		ExitCode_CommonControlsInitFailure,
+		ExitCode_RegisterClassFailure,
+		ExitCode_CreateWindowFailure,
+		ExitCode_XInputGamepadHookFailure
+	};
 }
 
 
@@ -248,14 +265,56 @@ LRESULT CALLBACK Lockdown::MouseHook(int code, WPARAM wparam, LPARAM lparam)
 }
 
 
+void Lockdown::button_handler(std::shared_ptr<gamepad::device> dev)
+{
+	tPrintf
+	(
+		"Received button event: Native id: %i, Virtual id: 0x%X (%i) val: %f\n",
+		dev->last_button_event()->native_id, dev->last_button_event()->vc,
+		dev->last_button_event()->vc, dev->last_button_event()->virtual_value
+	);
+
+	// @todo Ideally this write would be mutex protected.
+	CountdownSeconds = SecondsToLock;
+};
+
+
+void Lockdown::axis_handler(std::shared_ptr<gamepad::device> dev)
+{
+	tPrintf
+	(
+		"Received axis event: Native id: %i, Virtual id: 0x%X (%i) val: %f\n",
+		dev->last_axis_event()->native_id, dev->last_axis_event()->vc,
+		dev->last_axis_event()->vc, dev->last_axis_event()->virtual_value
+	);
+};
+
+
+void Lockdown::connect_handler(std::shared_ptr<gamepad::device> dev)
+{
+	tPrintf("%s connected\n", dev->get_name().c_str());
+	// @todo Ideally this write would be mutex protected.
+	CountdownSeconds = SecondsToLock;
+};
+
+
+void Lockdown::disconnect_handler(std::shared_ptr<gamepad::device> dev)
+{
+	tPrintf("%s disconnected\n", dev->get_name().c_str());
+	// @todo Ideally this write would be mutex protected.
+	CountdownSeconds = SecondsToLock;
+};
+
+
 int WINAPI WinMain(HINSTANCE hinstance, HINSTANCE hprevInstance, LPSTR cmdLine, int cmdShow)
 {
 	// If one is already running, do not start another.
 	LPCTSTR OtherWindowName = "LockdownTrayWindowName";
 	HWND otherFoundWindowHandle = FindWindow(NULL, OtherWindowName);
 	if (otherFoundWindowHandle)
-		return -1;
+		return Lockdown::ExitCode_AlreadyRunning;
 
+	tSystem::tSetSupplementaryDebuggerOutput();
 	Lockdown::CountdownSeconds = Lockdown::SecondsToLock;
 	if (cmdLine && strlen(cmdLine) > 0)
 	{
@@ -277,7 +336,7 @@ int WINAPI WinMain(HINSTANCE hinstance, HINSTANCE hprevInstance, LPSTR cmdLine, 
 	comControls.dwSize		= sizeof(comControls);
 	comControls.dwICC		= ICC_UPDOWN_CLASS | ICC_LISTVIEW_CLASSES;
 	if (!InitCommonControlsEx(&comControls))
-		return 1;
+		return Lockdown::ExitCode_CommonControlsInitFailure;
 
 	WNDCLASSEX winClass;
 	memset(&winClass, 0, sizeof(winClass));
@@ -294,7 +353,7 @@ int WINAPI WinMain(HINSTANCE hinstance, HINSTANCE hprevInstance, LPSTR cmdLine, 
 	winClass.lpszClassName		= "LockdownTrayClass";
 	winClass.hIconSm			= LoadIcon(hinstance, (LPCTSTR)MAKEINTRESOURCE(IDI_LOCKDOWN_ICON));
 	if (!RegisterClassEx(&winClass))
-		return 2;
+		return Lockdown::ExitCode_RegisterClassFailure;
 
 	HWND hwnd = CreateWindowEx
 	(
@@ -304,7 +363,7 @@ int WINAPI WinMain(HINSTANCE hinstance, HINSTANCE hprevInstance, LPSTR cmdLine, 
 	);
 
 	if (!hwnd)
-		return 3;
+		return Lockdown::ExitCode_CreateWindowFailure;
 
 	// System tray icon.
 	memset(&Lockdown::NotifyIconData, 0, sizeof(Lockdown::NotifyIconData));
@@ -320,12 +379,25 @@ int WINAPI WinMain(HINSTANCE hinstance, HINSTANCE hprevInstance, LPSTR cmdLine, 
 
 	Lockdown::NotifyIconData.hIcon = LoadIcon(hinstance, (LPCTSTR)MAKEINTRESOURCE(IDI_LOCKDOWN_ICON));
 	Lockdown::NotifyIconData.uCallbackMessage = WM_USER_TRAYICON;
-
 	Lockdown::NotifyIconAdded = Shell_NotifyIcon(NIM_ADD, &Lockdown::NotifyIconData);
-
 
 	// Send a timer message every second.
 	SetTimer(hwnd, 42, 1000, NULL);
+
+	// Hook into gamepad/controller events.
+	auto hook = gamepad::hook::make();
+	hook->set_plug_and_play(true, gamepad::ms(1000));
+	hook->set_sleep_time(gamepad::ms(100)); // 10fps poll.
+	hook->set_button_event_handler(Lockdown::button_handler);
+	hook->set_axis_event_handler(Lockdown::axis_handler);
+	hook->set_connect_event_handler(Lockdown::connect_handler);
+	hook->set_disconnect_event_handler(Lockdown::disconnect_handler);
+
+	if (!hook->start())
+	{
+		tPrintf("Couldn't start gamepad hook.\n");
+		return Lockdown::ExitCode_XInputGamepadHookFailure;
+	}
 
 	MSG msg;
 	while (GetMessage(&msg, NULL, 0, 0))
@@ -334,5 +406,5 @@ int WINAPI WinMain(HINSTANCE hinstance, HINSTANCE hprevInstance, LPSTR cmdLine, 
 		DispatchMessage(&msg);
 	}
 
-	return 0;
+	return Lockdown::ExitCode_Success;
 }

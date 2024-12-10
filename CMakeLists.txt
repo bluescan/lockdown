@@ -48,7 +48,6 @@ include(FetchContent)
 
 # Grab the Tacent library from github at configure time. Set desired options here first.
 if (CMAKE_SYSTEM_NAME MATCHES Windows)
-#	option(TACENT_UTF16_API_CALLS "Build Tacent With UTF16 API Calls" On)
 	option(TACENT_UTF16_API_CALLS "Build Tacent With UTF16 API Calls" Off)
 endif()
 
@@ -84,6 +83,7 @@ target_include_directories(
 	PRIVATE
 		${CMAKE_CURRENT_SOURCE_DIR}/Src
 		${CMAKE_CURRENT_SOURCE_DIR}/Res
+		${CMAKE_CURRENT_SOURCE_DIR}/Lib/libgamepad/include
 )
 
 target_compile_definitions(
@@ -99,8 +99,7 @@ target_compile_definitions(
 		# in TacentView (they are abstracted away by the Tacent libraries). But just in case
 		# anything in the viewer were to call an OS-level function, these enable the UTF-16
 		# versions if the TACENT_UTF16_API_CALLS option is set.
-#		$<$<BOOL:${PACKAGE_PORTABLE}>:PACKAGE_PORTABLE>
-
+		# $<$<BOOL:${PACKAGE_PORTABLE}>:PACKAGE_PORTABLE>
 		$<$<BOOL:${TACENT_UTF16_API_CALLS}>:UNICODE>					# C++	UFF-16
 		$<$<BOOL:${TACENT_UTF16_API_CALLS}>:_UNICODE>					# C		UTF-16
 		$<$<BOOL:${TACENT_UTF16_API_CALLS}>:TACENT_UTF16_API_CALLS>
@@ -144,28 +143,10 @@ if (MSVC)
 endif()
 
 # Dependencies.
-target_link_libraries(
-	${PROJECT_NAME}
-	PRIVATE
-		Foundation Math System # Image
-
-		# $<$<PLATFORM_ID:Windows>:kernel32.lib>
-		# $<$<PLATFORM_ID:Windows>:user32.lib>
-		# $<$<PLATFORM_ID:Windows>:gdi32.lib>
-		# $<$<PLATFORM_ID:Windows>:winspool.lib>
-		# $<$<PLATFORM_ID:Windows>:shell32.lib>
-		# $<$<PLATFORM_ID:Windows>:ole32.lib>
-		# $<$<PLATFORM_ID:Windows>:oleaut32.lib>
-		# $<$<PLATFORM_ID:Windows>:uuid.lib>
-		# $<$<PLATFORM_ID:Windows>:comdlg32.lib>
-		# $<$<PLATFORM_ID:Windows>:advapi32.lib>
-		Comctl32.lib
-
-#		shlwapi.lib
-#		Dbghelp.lib
-#		uxtheme.lib
-#		dwmapi.lib
-		# $<$<PLATFORM_ID:Windows>:${CMAKE_CURRENT_SOURCE_DIR}/Contrib/glfw/glfw3.lib>
+target_link_libraries(${PROJECT_NAME} PRIVATE
+	Foundation Math System Comctl32.lib
+	$<$<CONFIG:Debug>:${CMAKE_CURRENT_SOURCE_DIR}/Lib/libgamepad/debug/gamepad.lib>
+	$<$<CONFIG:Release>:${CMAKE_CURRENT_SOURCE_DIR}/Lib/libgamepad/release/gamepad.lib>
 )
 
 if (MSVC)
@@ -173,7 +154,7 @@ if (MSVC)
 		${PROJECT_NAME}
 		PRIVATE
 		# $<IF:$<BOOL:${TACENT_UTF16_API_CALLS}>,/ENTRY:wmainCRTStartup,/ENTRY:mainCRTStartup>
-		#"/SUBSYSTEM:CONSOLE"
+		# "/SUBSYSTEM:CONSOLE"
 		"/SUBSYSTEM:WINDOWS"
 	)
 	if (CMAKE_BUILD_TYPE MATCHES Debug)
