@@ -1,10 +1,10 @@
 // Lockdown.cpp
 //
-// Locks the computer after a period of inactivity. As of 2020_03_03 on Windows 10
-// it seems sometimes setting a screensaver timeout does not reliably lock the machine.
-// This simple system-tray app will hopefully be more reliable.
+// Locks the computer after a period of inactivity. On both Windows 10 and Windows 11
+// sometimes setting a screensaver timeout does not reliably lock the machine.
+// This simple system-tray app is reliable and reads gamepad inputs for game dev.
 //
-// Copyright (c) 2020, 2024 Tristan Grimmer.
+// Copyright (c) 2020, 2024, 2025 Tristan Grimmer.
 //
 // Permission to use, copy, modify, and/or distribute this software for any
 // purpose with or without fee is hereby granted, provided that the above
@@ -19,15 +19,17 @@
 // PERFORMANCE OF THIS SOFTWARE.
 
 #include <windows.h>
+#include <windowsx.h>
 #include <System/tPrint.h>
 #include <tchar.h>
 #include <commctrl.h>
 #include "resource.h"
 #include <libgamepad.hpp>
+#include "Version.cmake.h"
 #pragma warning(disable: 4996)
 
 
-#define LockdownVersion "V 1.0.3"
+//#define LockdownVersion "V 1.0.4"
 #define	WM_USER_TRAYICON (WM_USER+1)
 
 
@@ -40,20 +42,19 @@ namespace Lockdown
 	BOOL NotifyIconAdded					= 0;
 
 	BOOL Enabled							= 1;
-	int SecondsToLock						= 20 * 60;
+	int SecondsToLock						= 20 * 60;				// 20 minutes.
 	int MaxDisabledSeconds					= 3 * 60 * 60;			// 3 hour max disable time.
 	int CountdownSeconds					= SecondsToLock;
 	int CountdownDisabled					= MaxDisabledSeconds;
 
 	LRESULT CALLBACK MainWinProc(HWND hwnd, UINT message, WPARAM, LPARAM);
-	LRESULT CALLBACK KeyboardHook(int code, WPARAM, LPARAM);
-	LRESULT CALLBACK MouseHook(int code, WPARAM, LPARAM);
+	LRESULT CALLBACK Hook_Keyboard(int code, WPARAM, LPARAM);
+	LRESULT CALLBACK Hook_Mouse(int code, WPARAM, LPARAM);
 
-	// Gamepad hooks.
-	void button_handler(std::shared_ptr<gamepad::device>);
-	void axis_handler(std::shared_ptr<gamepad::device>);
-	void connect_handler(std::shared_ptr<gamepad::device>);
-	void disconnect_handler(std::shared_ptr<gamepad::device>);
+	void Hook_GamepadButton(std::shared_ptr<gamepad::device>);
+	void Hook_GamepadAxis(std::shared_ptr<gamepad::device>);
+	void Hook_GamepadConnect(std::shared_ptr<gamepad::device>);
+	void Hook_GamepadDisconnect(std::shared_ptr<gamepad::device>);
 
 	enum ExitCode
 	{
@@ -160,25 +161,39 @@ LRESULT CALLBACK Lockdown::MainWinProc(HWND hwnd, UINT message, WPARAM wparam, L
 			switch (LOWORD(wparam))
 			{
 				case ID_MENU_ABOUT:
-					::MessageBox
+				{
+					tString messageString;
+					tsPrintf
 					(
-						hwnd,
-						"Lockdown " LockdownVersion " by Tristan Grimmer.\n"
+						messageString,
+						// @todo Support command line options for gamepad buttons, gamepad axis, mouse buttons, mouse movement, keyboard, timeout minutes.
+						"Lockdown V%d.%d.%d by Tristan Grimmer.\n"
 						"Under ISC licence (similar to MIT).\n\n"
 						"Homepage at https://github.com/bluescan/lockdown\n\n"
 						"Usage: Consider running as a scheduled task on logon.\n"
 						"Do not terminate the task. An optional single integer\n"
 						"command line parameter may given to specify the number\n"
-						"of minutes. If no parameter 20 minutes is used. Timer is\n"
-						"reset on keypress and mouse buttons. Mouse movement\n"
+						"of minutes before locking. If no parameter 20 minutes is\n"
+						"used. Timer is reset on keypress, mouse buttons. Mouse movement\n"
 						"alone is NOT considered and will not reset the timer.\n",
-						"About Lockdown", MB_OK | MB_ICONINFORMATION
+						LockdownVersion::Major, LockdownVersion::Minor, LockdownVersion::Revision
+					);
+					::MessageBox
+					(
+						hwnd, messageString.Chr(), "About Lockdown", MB_OK | MB_ICONINFORMATION
 					);
 					break;
+				}
 
 				case ID_MENU_QUIT:
 				{
-					int result = ::MessageBox(hwnd, "If you quit the Lockdown app your computer will not automatically lock.\n\nAre you sure you want to quit?", "Quit Lockdown", MB_YESNO | MB_ICONEXCLAMATION);
+					int result = ::MessageBox
+					(
+						hwnd,
+						"If you quit the Lockdown app your computer will not automatically lock.\n\n"
+						"Are you sure you want to quit?",
+						"Quit Lockdown", MB_YESNO | MB_ICONEXCLAMATION
+					);
 					if (result == IDYES)
 						DestroyWindow(hwnd);
 					break;
@@ -232,7 +247,7 @@ LRESULT CALLBACK Lockdown::MainWinProc(HWND hwnd, UINT message, WPARAM wparam, L
 }
 
 
-LRESULT CALLBACK Lockdown::KeyboardHook(int code, WPARAM wparam, LPARAM lparam)
+LRESULT CALLBACK Lockdown::Hook_Keyboard(int code, WPARAM wparam, LPARAM lparam)
 {
 	if (wparam == WM_KEYDOWN)
 		CountdownSeconds = SecondsToLock;
@@ -241,8 +256,9 @@ LRESULT CALLBACK Lockdown::KeyboardHook(int code, WPARAM wparam, LPARAM lparam)
 }
 
 
-LRESULT CALLBACK Lockdown::MouseHook(int code, WPARAM wparam, LPARAM lparam)
+LRESULT CALLBACK Lockdown::Hook_Mouse(int code, WPARAM wparam, LPARAM lparam)
 {
+	MSLLHOOKSTRUCT* mouseStruct = (MSLLHOOKSTRUCT*)lparam;
 	if
 	(
 		(wparam == WM_LBUTTONDOWN) || (wparam == WM_LBUTTONUP) ||
@@ -254,10 +270,21 @@ LRESULT CALLBACK Lockdown::MouseHook(int code, WPARAM wparam, LPARAM lparam)
 	}
 
 	if
-		(
-			(wparam == WM_MOUSEMOVE)
-		)
+	(
+		(wparam == WM_MOUSEMOVE) || (wparam == WM_NCMOUSEMOVE)
+	)
 	{
+		int xpos = mouseStruct->pt.x;
+		int ypos = mouseStruct->pt.y;
+//		int xpos = GET_X_LPARAM(lparam);
+//		int ypos = GET_Y_LPARAM(lparam);
+		tPrintf
+		(
+			"Received MouseMove: X:%d Y:%d\n",
+			xpos,
+			ypos
+		);
+
 		// CountdownSeconds = SecondsToLock;
 	}
 
@@ -265,7 +292,7 @@ LRESULT CALLBACK Lockdown::MouseHook(int code, WPARAM wparam, LPARAM lparam)
 }
 
 
-void Lockdown::button_handler(std::shared_ptr<gamepad::device> dev)
+void Lockdown::Hook_GamepadButton(std::shared_ptr<gamepad::device> dev)
 {
 	tPrintf
 	(
@@ -279,7 +306,7 @@ void Lockdown::button_handler(std::shared_ptr<gamepad::device> dev)
 };
 
 
-void Lockdown::axis_handler(std::shared_ptr<gamepad::device> dev)
+void Lockdown::Hook_GamepadAxis(std::shared_ptr<gamepad::device> dev)
 {
 	tPrintf
 	(
@@ -290,7 +317,7 @@ void Lockdown::axis_handler(std::shared_ptr<gamepad::device> dev)
 };
 
 
-void Lockdown::connect_handler(std::shared_ptr<gamepad::device> dev)
+void Lockdown::Hook_GamepadConnect(std::shared_ptr<gamepad::device> dev)
 {
 	tPrintf("%s connected\n", dev->get_name().c_str());
 	// @todo Ideally this write would be mutex protected.
@@ -298,7 +325,7 @@ void Lockdown::connect_handler(std::shared_ptr<gamepad::device> dev)
 };
 
 
-void Lockdown::disconnect_handler(std::shared_ptr<gamepad::device> dev)
+void Lockdown::Hook_GamepadDisconnect(std::shared_ptr<gamepad::device> dev)
 {
 	tPrintf("%s disconnected\n", dev->get_name().c_str());
 	// @todo Ideally this write would be mutex protected.
@@ -326,8 +353,8 @@ int WINAPI WinMain(HINSTANCE hinstance, HINSTANCE hprevInstance, LPSTR cmdLine, 
 		}
 	}
 
-	Lockdown::hKeyboardHook		= SetWindowsHookEx(WH_KEYBOARD_LL,	Lockdown::KeyboardHook,	NULL, 0);
-	Lockdown::hMouseHook		= SetWindowsHookEx(WH_MOUSE_LL,		Lockdown::MouseHook,	NULL, 0);
+	Lockdown::hKeyboardHook		= SetWindowsHookEx(WH_KEYBOARD_LL,	Lockdown::Hook_Keyboard,	NULL, 0);
+	Lockdown::hMouseHook		= SetWindowsHookEx(WH_MOUSE_LL,		Lockdown::Hook_Mouse,		NULL, 0);
 
 	Lockdown::hInst = hinstance;
 
@@ -388,10 +415,10 @@ int WINAPI WinMain(HINSTANCE hinstance, HINSTANCE hprevInstance, LPSTR cmdLine, 
 	auto hook = gamepad::hook::make();
 	hook->set_plug_and_play(true, gamepad::ms(1000));
 	hook->set_sleep_time(gamepad::ms(100)); // 10fps poll.
-	hook->set_button_event_handler(Lockdown::button_handler);
-	hook->set_axis_event_handler(Lockdown::axis_handler);
-	hook->set_connect_event_handler(Lockdown::connect_handler);
-	hook->set_disconnect_event_handler(Lockdown::disconnect_handler);
+	hook->set_button_event_handler(Lockdown::Hook_GamepadButton);
+	hook->set_axis_event_handler(Lockdown::Hook_GamepadAxis);
+	hook->set_connect_event_handler(Lockdown::Hook_GamepadConnect);
+	hook->set_disconnect_event_handler(Lockdown::Hook_GamepadDisconnect);
 
 	if (!hook->start())
 	{

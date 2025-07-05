@@ -4,22 +4,22 @@ cmake_policy(SET CMP0091 NEW)
 # Set default build-type (AKA the configuration in other IDEs).
 set(CMAKE_BUILD_TYPE_INIT Release)
 
-# Setup Release and Debug build-types (only).
+# Setup Debug, Release, and Ship build-types (only).
 # No reason to set CMAKE_CONFIGURATION_TYPES if it's not a multiconfig generator
 # Also no reason mess with CMAKE_BUILD_TYPE if it's a multiconfig generator.
 get_property(isMultiConfig GLOBAL PROPERTY GENERATOR_IS_MULTI_CONFIG)
 if (isMultiConfig)
-	set(CMAKE_CONFIGURATION_TYPES "Debug;Release" CACHE STRING "" FORCE)
+	set(CMAKE_CONFIGURATION_TYPES "Debug;Release;Ship" CACHE STRING "" FORCE)
 else()
 	if (NOT DEFINED CMAKE_BUILD_TYPE)
-		message(STATUS "Lockdown -- Default to Release build.")
-		set(CMAKE_BUILD_TYPE Release CACHE STRING "Choose Build Type" FORCE)
+		message(STATUS "Lockdown -- Default to Ship build.")
+		set(CMAKE_BUILD_TYPE Ship CACHE STRING "Choose Build Type" FORCE)
 	endif()
 	message(STATUS "Lockdown -- Build type set to: ${CMAKE_BUILD_TYPE}")
 	set_property(CACHE CMAKE_BUILD_TYPE PROPERTY HELPSTRING "Choose Build Type")
 
 	# Set the valid options for cmake-gui drop-down list. CMake tools for vscode does not (but should) respect this.
-	set_property(CACHE CMAKE_BUILD_TYPE PROPERTY STRINGS "Debug" "Release")
+	set_property(CACHE CMAKE_BUILD_TYPE PROPERTY STRINGS "Debug" "Release" "Ship")
 endif()
 
 # This include specifies the project and version.
@@ -92,6 +92,7 @@ target_compile_definitions(
 		ARCHITECTURE_X64
 		$<$<CONFIG:Debug>:CONFIG_DEBUG>
 		$<$<CONFIG:Release>:CONFIG_RELEASE>
+		$<$<CONFIG:Ship>:CONFIG_SHIP>
 		$<$<CXX_COMPILER_ID:MSVC>:_CRT_SECURE_NO_DEPRECATE>
 		PLATFORM_WINDOWS
 
@@ -147,6 +148,7 @@ target_link_libraries(${PROJECT_NAME} PRIVATE
 	Foundation Math System Comctl32.lib
 	$<$<CONFIG:Debug>:${CMAKE_CURRENT_SOURCE_DIR}/Lib/libgamepad/debug/gamepad.lib>
 	$<$<CONFIG:Release>:${CMAKE_CURRENT_SOURCE_DIR}/Lib/libgamepad/release/gamepad.lib>
+	$<$<CONFIG:Ship>:${CMAKE_CURRENT_SOURCE_DIR}/Lib/libgamepad/release/gamepad.lib>
 )
 
 if (MSVC)
