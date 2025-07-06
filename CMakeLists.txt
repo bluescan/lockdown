@@ -12,8 +12,8 @@ if (isMultiConfig)
 	set(CMAKE_CONFIGURATION_TYPES "Debug;Release;Ship" CACHE STRING "" FORCE)
 else()
 	if (NOT DEFINED CMAKE_BUILD_TYPE)
-		message(STATUS "Lockdown -- Default to Ship build.")
-		set(CMAKE_BUILD_TYPE Ship CACHE STRING "Choose Build Type" FORCE)
+		message(STATUS "Lockdown -- Default to Release build.")
+		set(CMAKE_BUILD_TYPE Release CACHE STRING "Choose Build Type" FORCE)
 	endif()
 	message(STATUS "Lockdown -- Build type set to: ${CMAKE_BUILD_TYPE}")
 	set_property(CACHE CMAKE_BUILD_TYPE PROPERTY HELPSTRING "Choose Build Type")
@@ -111,7 +111,7 @@ target_compile_options(
 	${PROJECT_NAME}
 	PRIVATE
 		# MSVC compiler. Warning /utf-8 is needed for MSVC to support UTF-8 source files. Basically u8 string literals won't work without it.
-		$<$<CXX_COMPILER_ID:MSVC>:/utf-8 /W2 /GS /Gy /Zc:wchar_t /Gm- /Zc:inline /fp:precise /WX- /Zc:forScope /Gd /FC>
+		$<$<CXX_COMPILER_ID:MSVC>:/utf-8 /GS /Gy /Zc:wchar_t /Gm- /Zc:inline /fp:precise /WX- /Zc:forScope /Gd /FC>
 
 		# Clang compiler.
 		$<$<CXX_COMPILER_ID:Clang>:-Wno-switch>
@@ -127,6 +127,8 @@ target_compile_options(
 		$<$<AND:$<CONFIG:Debug>,$<CXX_COMPILER_ID:MSVC>>:/Od>
 		$<$<AND:$<CONFIG:Release>,$<OR:$<CXX_COMPILER_ID:GNU>,$<CXX_COMPILER_ID:Clang>>>:-O2>
 		$<$<AND:$<CONFIG:Release>,$<CXX_COMPILER_ID:MSVC>>:/O2>
+		$<$<AND:$<CONFIG:Ship>,$<OR:$<CXX_COMPILER_ID:GNU>,$<CXX_COMPILER_ID:Clang>>>:-O2>
+		$<$<AND:$<CONFIG:Ship>,$<CXX_COMPILER_ID:MSVC>>:/O2>
 )
 
 target_compile_features(${PROJECT_NAME} PRIVATE cxx_std_20)

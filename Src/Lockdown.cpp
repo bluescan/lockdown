@@ -19,7 +19,6 @@
 // PERFORMANCE OF THIS SOFTWARE.
 
 #include <windows.h>
-#include <windowsx.h>
 #include <System/tPrint.h>
 #include <tchar.h>
 #include <commctrl.h>
@@ -29,7 +28,6 @@
 #pragma warning(disable: 4996)
 
 
-//#define LockdownVersion "V 1.0.4"
 #define	WM_USER_TRAYICON (WM_USER+1)
 
 
@@ -106,9 +104,9 @@ LRESULT CALLBACK Lockdown::MainWinProc(HWND hwnd, UINT message, WPARAM wparam, L
 			if (NotifyIconAdded)
 			{
 				if (Enabled)
-					sprintf(NotifyIconData.szTip, "Lock in %02d:%02d", mins, secs);
+					tsPrintf(NotifyIconData.szTip, sizeof(NotifyIconData.szTip), "Lock in %02d:%02d", mins, secs);
 				else
-					sprintf(NotifyIconData.szTip, "Lockdown Disabled");
+					tsPrintf(NotifyIconData.szTip, sizeof(NotifyIconData.szTip), "Lockdown Disabled");
 				Shell_NotifyIcon(NIM_MODIFY, &NotifyIconData);
 			}
 
@@ -276,9 +274,7 @@ LRESULT CALLBACK Lockdown::Hook_Mouse(int code, WPARAM wparam, LPARAM lparam)
 	{
 		int xpos = mouseStruct->pt.x;
 		int ypos = mouseStruct->pt.y;
-//		int xpos = GET_X_LPARAM(lparam);
-//		int ypos = GET_Y_LPARAM(lparam);
-		tPrintf
+		tdPrint
 		(
 			"Received MouseMove: X:%d Y:%d\n",
 			xpos,
@@ -294,7 +290,7 @@ LRESULT CALLBACK Lockdown::Hook_Mouse(int code, WPARAM wparam, LPARAM lparam)
 
 void Lockdown::Hook_GamepadButton(std::shared_ptr<gamepad::device> dev)
 {
-	tPrintf
+	tdPrint
 	(
 		"Received button event: Native id: %i, Virtual id: 0x%X (%i) val: %f\n",
 		dev->last_button_event()->native_id, dev->last_button_event()->vc,
@@ -308,7 +304,7 @@ void Lockdown::Hook_GamepadButton(std::shared_ptr<gamepad::device> dev)
 
 void Lockdown::Hook_GamepadAxis(std::shared_ptr<gamepad::device> dev)
 {
-	tPrintf
+	tdPrint
 	(
 		"Received axis event: Native id: %i, Virtual id: 0x%X (%i) val: %f\n",
 		dev->last_axis_event()->native_id, dev->last_axis_event()->vc,
@@ -319,7 +315,7 @@ void Lockdown::Hook_GamepadAxis(std::shared_ptr<gamepad::device> dev)
 
 void Lockdown::Hook_GamepadConnect(std::shared_ptr<gamepad::device> dev)
 {
-	tPrintf("%s connected\n", dev->get_name().c_str());
+	tdPrint("%s connected\n", dev->get_name().c_str());
 	// @todo Ideally this write would be mutex protected.
 	CountdownSeconds = SecondsToLock;
 };
@@ -327,7 +323,7 @@ void Lockdown::Hook_GamepadConnect(std::shared_ptr<gamepad::device> dev)
 
 void Lockdown::Hook_GamepadDisconnect(std::shared_ptr<gamepad::device> dev)
 {
-	tPrintf("%s disconnected\n", dev->get_name().c_str());
+	tdPrint("%s disconnected\n", dev->get_name().c_str());
 	// @todo Ideally this write would be mutex protected.
 	CountdownSeconds = SecondsToLock;
 };
@@ -402,7 +398,7 @@ int WINAPI WinMain(HINSTANCE hinstance, HINSTANCE hprevInstance, LPSTR cmdLine, 
 	int mins = Lockdown::CountdownSeconds / 60;
 	int secs = Lockdown::CountdownSeconds % 60;
 	Lockdown::Enabled = 1;
-	sprintf(Lockdown::NotifyIconData.szTip, "Lock in %02d:%02d", mins, secs);
+	tsPrintf(Lockdown::NotifyIconData.szTip, sizeof(Lockdown::NotifyIconData.szTip), "Lock in %02d:%02d", mins, secs);
 
 	Lockdown::NotifyIconData.hIcon = LoadIcon(hinstance, (LPCTSTR)MAKEINTRESOURCE(IDI_LOCKDOWN_ICON));
 	Lockdown::NotifyIconData.uCallbackMessage = WM_USER_TRAYICON;
@@ -422,7 +418,7 @@ int WINAPI WinMain(HINSTANCE hinstance, HINSTANCE hprevInstance, LPSTR cmdLine, 
 
 	if (!hook->start())
 	{
-		tPrintf("Couldn't start gamepad hook.\n");
+		tdPrint("Couldn't start gamepad hook.\n");
 		return Lockdown::ExitCode_XInputGamepadHookFailure;
 	}
 
