@@ -1,0 +1,16 @@
+buildType:
+  default: ship
+  description: Build Type
+  choices:
+    debug:
+      short: Debug
+      long: Build Debug
+      buildType: Debug
+    release:
+      short: Release
+      long: Build Release
+      buildType: Release
+    ship:
+      short: Ship
+      long: Build Ship
+      buildType: Ship
