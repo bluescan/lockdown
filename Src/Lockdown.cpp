@@ -218,12 +218,7 @@ LRESULT CALLBACK Lockdown::MainWinProc(HWND hwnd, UINT message, WPARAM wparam, L
 							"Cancel will leave lockdown enabled.\n\n",
 							MaxDisabledSeconds / 3600, (MaxDisabledSeconds % 3600) / 60
 						);
-						int result = ::MessageBox
-						(
-							hwnd,
-							message.Chr(),
-							"Disable Lockdown?", MB_OKCANCEL | MB_ICONQUESTION
-						);
+						int result = ::MessageBox(hwnd, message.Chr(), "Disable Lockdown?", MB_OKCANCEL | MB_ICONQUESTION);
 						if (result == IDOK)
 						{
 							CountdownDisabled = MaxDisabledSeconds;
@@ -282,23 +277,15 @@ LRESULT CALLBACK Lockdown::Hook_Mouse(int code, WPARAM wparam, LPARAM lparam)
 		(wparam == WM_MOUSEMOVE) || (wparam == WM_NCMOUSEMOVE)
 	)
 	{
-		tVector2 prevPos;
-		prevPos.Set(float(MouseX), float(MouseY));
+		tVector2 prevPos{float(MouseX), float(MouseY)};
 		int xpos = mouseStruct->pt.x;
 		int ypos = mouseStruct->pt.y;
 		tVector2 currPos{float(xpos), float(ypos)};
-//		currPos.Set(float(xpos), float(ypos));
 		tVector2 delta = currPos - prevPos;
 		if (delta.Length() > MouseDistanceThreshold)
 		{
 			MouseX = xpos;
 			MouseY = ypos;
-			tdPrintf
-			(
-				"MouseMove Threshold Reached: X:%d Y:%d\n",
-				xpos,
-				ypos
-			);
 			CountdownSeconds = SecondsToLock;
 		}
 	}
@@ -316,6 +303,7 @@ void Lockdown::Hook_GamepadButton(std::shared_ptr<gamepad::device> dev)
 		dev->last_button_event()->vc, dev->last_button_event()->virtual_value
 	);
 
+	// Any button press on any gamepad resets the countdown.
 	// @todo Ideally this write would be mutex protected.
 	CountdownSeconds = SecondsToLock;
 };
@@ -329,12 +317,21 @@ void Lockdown::Hook_GamepadAxis(std::shared_ptr<gamepad::device> dev)
 		dev->last_axis_event()->native_id, dev->last_axis_event()->vc,
 		dev->last_axis_event()->vc, dev->last_axis_event()->virtual_value
 	);
+
+	// The gamepad device already deals with axis dead-zones. This means we can safely ignore
+	// the fact that we're getting events from different gamepads and 'wobbling' between
+	// them. We can simply reset the countdown on any axis event -- regardless of which
+	// gamepad or the particular axis.
+
+	// @todo Ideally this write would be mutex protected.
+	CountdownSeconds = SecondsToLock;
 };
 
 
 void Lockdown::Hook_GamepadConnect(std::shared_ptr<gamepad::device> dev)
 {
 	tdPrintf("%s connected\n", dev->get_name().c_str());
+
 	// @todo Ideally this write would be mutex protected.
 	CountdownSeconds = SecondsToLock;
 };
@@ -343,8 +340,9 @@ void Lockdown::Hook_GamepadConnect(std::shared_ptr<gamepad::device> dev)
 void Lockdown::Hook_GamepadDisconnect(std::shared_ptr<gamepad::device> dev)
 {
 	tdPrintf("%s disconnected\n", dev->get_name().c_str());
-	// @todo Ideally this write would be mutex protected.
-	CountdownSeconds = SecondsToLock;
+
+	// On a gamepad disconnect it makes sense _not_ to coult it as an input. One might,
+	// for example, be disconnecting the gamepad when leaving for the day.
 };
 
 
