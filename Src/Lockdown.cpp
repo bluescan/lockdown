@@ -20,14 +20,14 @@
 
 #include <windows.h>
 #include <System/tPrint.h>
+#include <Math/tVector2.h>
 #include <tchar.h>
 #include <commctrl.h>
 #include "resource.h"
 #include <libgamepad.hpp>
 #include "Version.cmake.h"
 #pragma warning(disable: 4996)
-
-
+using namespace tMath;
 #define	WM_USER_TRAYICON (WM_USER+1)
 
 
@@ -40,10 +40,13 @@ namespace Lockdown
 	BOOL NotifyIconAdded					= 0;
 
 	BOOL Enabled							= 1;
-	int SecondsToLock						= 20 * 60;				// 20 minutes.
-	int MaxDisabledSeconds					= 3 * 60 * 60;			// 3 hour max disable time.
+	int SecondsToLock						= 20 * 60;				// 20 minutes unless overridden by command line.
+	const int MaxDisabledSeconds			= 3 * 60 * 60;			// 3 hour max disable time.
 	int CountdownSeconds					= SecondsToLock;
 	int CountdownDisabled					= MaxDisabledSeconds;
+	int MouseX								= 0;					// This may be negative for multiple monitors.
+	int MouseY								= 0;					// This may be negative for multiple monitors.
+	const int MouseDistanceThreshold		= 20;					// How far mouse must be moved to count as activity.
 
 	LRESULT CALLBACK MainWinProc(HWND hwnd, UINT message, WPARAM, LPARAM);
 	LRESULT CALLBACK Hook_Keyboard(int code, WPARAM, LPARAM);
@@ -206,12 +209,19 @@ LRESULT CALLBACK Lockdown::MainWinProc(HWND hwnd, UINT message, WPARAM wparam, L
 					// If about to toggle off print a warning.
 					if (Enabled)
 					{
+						tString message;
+						tsPrintf
+						(
+							message,
+							"Please confirm you want to disable lockdown.\n\n"
+							"OK will disable auto locking for %d hours %d minutes.\n"
+							"Cancel will leave lockdown enabled.\n\n",
+							MaxDisabledSeconds / 3600, (MaxDisabledSeconds % 3600) / 60
+						);
 						int result = ::MessageBox
 						(
 							hwnd,
-							"Please confirm you want to disable lockdown.\n\n"
-							"Pressing OK will disable auto locking for 3 hours.\n"
-							"Pressing Cancel will leave lockdown enabled.\n\n",
+							message.Chr(),
 							"Disable Lockdown?", MB_OKCANCEL | MB_ICONQUESTION
 						);
 						if (result == IDOK)
@@ -272,16 +282,25 @@ LRESULT CALLBACK Lockdown::Hook_Mouse(int code, WPARAM wparam, LPARAM lparam)
 		(wparam == WM_MOUSEMOVE) || (wparam == WM_NCMOUSEMOVE)
 	)
 	{
+		tVector2 prevPos;
+		prevPos.Set(float(MouseX), float(MouseY));
 		int xpos = mouseStruct->pt.x;
 		int ypos = mouseStruct->pt.y;
-		tdPrint
-		(
-			"Received MouseMove: X:%d Y:%d\n",
-			xpos,
-			ypos
-		);
-
-		// CountdownSeconds = SecondsToLock;
+		tVector2 currPos{float(xpos), float(ypos)};
+//		currPos.Set(float(xpos), float(ypos));
+		tVector2 delta = currPos - prevPos;
+		if (delta.Length() > MouseDistanceThreshold)
+		{
+			MouseX = xpos;
+			MouseY = ypos;
+			tdPrintf
+			(
+				"MouseMove Threshold Reached: X:%d Y:%d\n",
+				xpos,
+				ypos
+			);
+			CountdownSeconds = SecondsToLock;
+		}
 	}
 
 	return CallNextHookEx(hKeyboardHook, code, wparam, lparam);
@@ -290,7 +309,7 @@ LRESULT CALLBACK Lockdown::Hook_Mouse(int code, WPARAM wparam, LPARAM lparam)
 
 void Lockdown::Hook_GamepadButton(std::shared_ptr<gamepad::device> dev)
 {
-	tdPrint
+	tdPrintf
 	(
 		"Received button event: Native id: %i, Virtual id: 0x%X (%i) val: %f\n",
 		dev->last_button_event()->native_id, dev->last_button_event()->vc,
@@ -304,7 +323,7 @@ void Lockdown::Hook_GamepadButton(std::shared_ptr<gamepad::device> dev)
 
 void Lockdown::Hook_GamepadAxis(std::shared_ptr<gamepad::device> dev)
 {
-	tdPrint
+	tdPrintf
 	(
 		"Received axis event: Native id: %i, Virtual id: 0x%X (%i) val: %f\n",
 		dev->last_axis_event()->native_id, dev->last_axis_event()->vc,
@@ -315,7 +334,7 @@ void Lockdown::Hook_GamepadAxis(std::shared_ptr<gamepad::device> dev)
 
 void Lockdown::Hook_GamepadConnect(std::shared_ptr<gamepad::device> dev)
 {
-	tdPrint("%s connected\n", dev->get_name().c_str());
+	tdPrintf("%s connected\n", dev->get_name().c_str());
 	// @todo Ideally this write would be mutex protected.
 	CountdownSeconds = SecondsToLock;
 };
@@ -323,7 +342,7 @@ void Lockdown::Hook_GamepadConnect(std::shared_ptr<gamepad::device> dev)
 
 void Lockdown::Hook_GamepadDisconnect(std::shared_ptr<gamepad::device> dev)
 {
-	tdPrint("%s disconnected\n", dev->get_name().c_str());
+	tdPrintf("%s disconnected\n", dev->get_name().c_str());
 	// @todo Ideally this write would be mutex protected.
 	CountdownSeconds = SecondsToLock;
 };
@@ -418,7 +437,7 @@ int WINAPI WinMain(HINSTANCE hinstance, HINSTANCE hprevInstance, LPSTR cmdLine, 
 
 	if (!hook->start())
 	{
-		tdPrint("Couldn't start gamepad hook.\n");
+		tdPrintf("Couldn't start gamepad hook.\n");
 		return Lockdown::ExitCode_XInputGamepadHookFailure;
 	}
 
