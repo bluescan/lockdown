@@ -20,6 +20,7 @@
 
 #include <windows.h>
 #include <System/tPrint.h>
+#include <System/tCmdLine.h>
 #include <Math/tVector2.h>
 #include <tchar.h>
 #include <commctrl.h>
@@ -29,6 +30,17 @@
 #pragma warning(disable: 4996)
 using namespace tMath;
 #define	WM_USER_TRAYICON (WM_USER+1)
+
+
+// Command-line options.
+tCmdLine::tOption OptionHelp			("Display help and useage screen.",	"help",		'h'			);
+tCmdLine::tOption OptionTimeoutMinutes	("Timeout in minutes.",				"timeout",	't',	1	);
+tCmdLine::tOption OptionTimeoutSeconds	("Timeout in seconds.",				"seconds",	's',	1	);
+tCmdLine::tOption OptionPadButtons		("Detect any gamepad button input.","pad",		'p'			);
+tCmdLine::tOption OptionAxis			("Detect any gamepad axis changes.","axis",		'a'			);
+tCmdLine::tOption OptionKeyboard		("Detect any keyboard input",		"keyboard",	'k'			);
+tCmdLine::tOption OptionMouseMovement	("Detect any mouse movement.",		"mouse",	'm'			);
+tCmdLine::tOption OptionMouseButton		("Detect any mouse button presses.","button",	'b'			);
 
 
 namespace Lockdown
@@ -286,6 +298,7 @@ LRESULT CALLBACK Lockdown::Hook_Mouse(int code, WPARAM wparam, LPARAM lparam)
 		{
 			MouseX = xpos;
 			MouseY = ypos;
+//			tdPrintf("Mouse Move: %d %d\n", xpos, ypos);
 			CountdownSeconds = SecondsToLock;
 		}
 	}
@@ -355,6 +368,13 @@ int WINAPI WinMain(HINSTANCE hinstance, HINSTANCE hprevInstance, LPSTR cmdLine, 
 		return Lockdown::ExitCode_AlreadyRunning;
 
 	tSystem::tSetSupplementaryDebuggerOutput();
+
+	// Parse command line.
+	tCmdLine::tParse((char8_t*)cmdLine);
+
+	// @wip
+	// tCmdLine::tPrintUsage(LockdownVersion::Major, LockdownVersion::Minor, LockdownVersion::Revision);
+
 	Lockdown::CountdownSeconds = Lockdown::SecondsToLock;
 	if (cmdLine && strlen(cmdLine) > 0)
 	{
