@@ -1,21 +1,18 @@
 // Lockdown.cpp
 //
-// Locks the computer after a period of inactivity. On both Windows 10 and Windows 11
-// sometimes setting a screensaver timeout does not reliably lock the machine.
-// This simple system-tray app is reliable and reads gamepad inputs for game dev.
+// Locks the computer after a period of inactivity. On both Windows 10 and Windows 11 sometimes setting a screensaver
+// timeout does not reliably lock the machine. This simple system-tray app is reliable and reads gamepad inputs for
+// game dev.
 //
 // Copyright (c) 2020, 2024, 2025 Tristan Grimmer.
 //
-// Permission to use, copy, modify, and/or distribute this software for any
-// purpose with or without fee is hereby granted, provided that the above
-// copyright notice and this permission notice appear in all copies.
+// Permission to use, copy, modify, and/or distribute this software for any purpose with or without fee is hereby
+// granted, provided that the above copyright notice and this permission notice appear in all copies.
 //
-// THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES WITH
-// REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY
-// AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY SPECIAL, DIRECT,
-// INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM
-// LOSS OF USE, DATA OR PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE
-// OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
+// THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES WITH REGARD TO THIS SOFTWARE INCLUDING ALL
+// IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY SPECIAL, DIRECT,
+// INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN
+// AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
 // PERFORMANCE OF THIS SOFTWARE.
 
 #include <windows.h>
@@ -33,7 +30,8 @@ using namespace tMath;
 
 
 // Command-line options.
-tCmdLine::tOption OptionHelp			("Display help and useage screen.",	"help",		'h'			);
+tCmdLine::tOption OptionHelp			("Display help and usage screen.",	"help",		'h'			);
+tCmdLine::tOption OptionSyntax			("Display CLI syntax guide.",		"syntax",	'x'			);
 tCmdLine::tOption OptionTimeoutMinutes	("Timeout in minutes.",				"timeout",	't',	1	);
 tCmdLine::tOption OptionTimeoutSeconds	("Timeout in seconds.",				"seconds",	's',	1	);
 tCmdLine::tOption OptionPadButtons		("Detect any gamepad button input.","pad",		'p'			);
@@ -58,7 +56,7 @@ namespace Lockdown
 	int CountdownDisabled					= MaxDisabledSeconds;
 	int MouseX								= 0;					// This may be negative for multiple monitors.
 	int MouseY								= 0;					// This may be negative for multiple monitors.
-	const int MouseDistanceThreshold		= 20;					// How far mouse must be moved to count as activity.
+	const int MouseDistanceThreshold		= 20;					// How far mouse must move to count as activity.
 
 	LRESULT CALLBACK MainWinProc(HWND hwnd, UINT message, WPARAM, LPARAM);
 	LRESULT CALLBACK Hook_Keyboard(int code, WPARAM, LPARAM);
@@ -182,14 +180,20 @@ LRESULT CALLBACK Lockdown::MainWinProc(HWND hwnd, UINT message, WPARAM wparam, L
 						// @todo Support command line options for gamepad buttons, gamepad axis, mouse buttons, mouse movement, keyboard, timeout minutes.
 						"Lockdown V%d.%d.%d by Tristan Grimmer.\n"
 						"Under ISC licence (similar to MIT).\n\n"
-						"Homepage at https://github.com/bluescan/lockdown\n\n"
-						"Usage: Consider running as a scheduled task on logon.\n"
-						"Do not terminate the task. An optional single integer\n"
-						"command line parameter may given to specify the number\n"
-						"of minutes before locking. If no parameter 20 minutes is\n"
-						"used. Timer is reset on keypress, mouse buttons. Mouse movement\n"
-						"alone is NOT considered and will not reset the timer.\n",
-						LockdownVersion::Major, LockdownVersion::Minor, LockdownVersion::Revision
+						"Homepage at https://github.com/bluescan/lockdown\n"
+						"\n"
+						"This system tray program locks the computer after a\n"
+						"specified duration without user input.\n"
+						"\n"
+						"Consider running as a scheduled task on logon. Do not\n"
+						"terminate the task. The timeout duration as well as what\n"
+						"inputs should be detected may be set via command line\n"
+						"parameters. Run 'lockdown.exe -h' to view all supported\n"
+						"options. If no params entered, the timeout is %d minutes.\n"
+						"By default the timer is reset on keyboard activity, mouse\n"
+						"button presses, mouse movement, gamepad button presses,\n"
+						"and gamepad axis displacement.\n",
+						LockdownVersion::Major, LockdownVersion::Minor, LockdownVersion::Revision, Lockdown::CountdownSeconds/60
 					);
 					::MessageBox
 					(
@@ -298,7 +302,6 @@ LRESULT CALLBACK Lockdown::Hook_Mouse(int code, WPARAM wparam, LPARAM lparam)
 		{
 			MouseX = xpos;
 			MouseY = ypos;
-//			tdPrintf("Mouse Move: %d %d\n", xpos, ypos);
 			CountdownSeconds = SecondsToLock;
 		}
 	}
@@ -372,9 +375,6 @@ int WINAPI WinMain(HINSTANCE hinstance, HINSTANCE hprevInstance, LPSTR cmdLine, 
 	// Parse command line.
 	tCmdLine::tParse((char8_t*)cmdLine);
 
-	// @wip
-	// tCmdLine::tPrintUsage(LockdownVersion::Major, LockdownVersion::Minor, LockdownVersion::Revision);
-
 	Lockdown::CountdownSeconds = Lockdown::SecondsToLock;
 	if (cmdLine && strlen(cmdLine) > 0)
 	{
@@ -425,6 +425,30 @@ int WINAPI WinMain(HINSTANCE hinstance, HINSTANCE hprevInstance, LPSTR cmdLine, 
 	if (!hwnd)
 		return Lockdown::ExitCode_CreateWindowFailure;
 
+	// We can't display message boxes until we have an hwnd.
+	if (OptionHelp.IsPresent())
+	{
+		tString usage;
+		tCmdLine::tStringUsageNI
+		(
+			usage, u8"Tristan Grimmer",
+			u8"Lockdown is a system-tray program that locks the computer after a period of inactivity.",
+			LockdownVersion::Major, LockdownVersion::Minor, LockdownVersion::Revision
+		);
+		::MessageBox(hwnd, usage.Chr(), "Lockdown CLI Usage", MB_OK | MB_ICONINFORMATION);
+		DestroyWindow(hwnd);
+		return Lockdown::ExitCode_Success;
+	}
+
+	if (OptionSyntax.IsPresent())
+	{
+		tString syntaxGuide;
+		tCmdLine::tStringSyntax(syntaxGuide, 140);
+		::MessageBox(hwnd, syntaxGuide.Chr(), "Lockdown CLI Syntax Guide", MB_OK | MB_ICONINFORMATION);
+		DestroyWindow(hwnd);
+		return Lockdown::ExitCode_Success;
+	}
+
 	// System tray icon.
 	memset(&Lockdown::NotifyIconData, 0, sizeof(Lockdown::NotifyIconData));
 	Lockdown::NotifyIconData.cbSize			= sizeof(Lockdown::NotifyIconData);
@@ -456,6 +480,7 @@ int WINAPI WinMain(HINSTANCE hinstance, HINSTANCE hprevInstance, LPSTR cmdLine, 
 	if (!hook->start())
 	{
 		tdPrintf("Couldn't start gamepad hook.\n");
+		DestroyWindow(hwnd);
 		return Lockdown::ExitCode_XInputGamepadHookFailure;
 	}
 
@@ -466,5 +491,6 @@ int WINAPI WinMain(HINSTANCE hinstance, HINSTANCE hprevInstance, LPSTR cmdLine, 
 		DispatchMessage(&msg);
 	}
 
+	// If we get here WM_CLOSE has already handled DestroyWindow.
 	return Lockdown::ExitCode_Success;
 }
