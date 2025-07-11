@@ -31,13 +31,17 @@ using namespace tMath;
 
 // Command-line options.
 tCmdLine::tOption OptionHelp			("Display help and usage screen.",	"help",		'h'			);
-tCmdLine::tOption OptionSyntax			("Display CLI syntax guide.",		"syntax",	'x'			);
-tCmdLine::tOption OptionTimeoutMinutes	("Timeout in minutes.",				"timeout",	't',	1	);
+tCmdLine::tOption OptionSyntax			("Display CLI syntax guide.",		"syntax",	'y'			);
+tCmdLine::tOption OptionTimeoutMinutes	("Timeout in minutes.",				"minutes",	'm',	1	);
 tCmdLine::tOption OptionTimeoutSeconds	("Timeout in seconds.",				"seconds",	's',	1	);
+
+/////////////// WIP
+tCmdLine::tOption OptionDisableDuration	("Max suspend time in minutes.",	"suspend",	'x',	1	);
+
 tCmdLine::tOption OptionPadButtons		("Detect any gamepad button input.","pad",		'p'			);
 tCmdLine::tOption OptionAxis			("Detect any gamepad axis changes.","axis",		'a'			);
 tCmdLine::tOption OptionKeyboard		("Detect any keyboard input",		"keyboard",	'k'			);
-tCmdLine::tOption OptionMouseMovement	("Detect any mouse movement.",		"mouse",	'm'			);
+tCmdLine::tOption OptionMouseMovement	("Detect any mouse movement.",		"movement",	'v'			);
 tCmdLine::tOption OptionMouseButton		("Detect any mouse button presses.","button",	'b'			);
 
 
@@ -49,7 +53,7 @@ namespace Lockdown
 	HHOOK hMouseHook						= NULL;
 	BOOL NotifyIconAdded					= 0;
 
-	BOOL Enabled							= 1;
+	bool Enabled							= true;
 	int SecondsToLock						= 20 * 60;				// 20 minutes unless overridden by command line.
 	const int MaxDisabledSeconds			= 3 * 60 * 60;			// 3 hour max disable time.
 	int CountdownSeconds					= SecondsToLock;
@@ -108,12 +112,12 @@ LRESULT CALLBACK Lockdown::MainWinProc(HWND hwnd, UINT message, WPARAM wparam, L
 			{
 				CountdownDisabled--;
 				if (CountdownDisabled <= 0)
-					Enabled = 1;
+					Enabled = true;
 			}
 
-			int mins = CountdownSeconds / 60;
-			int secs = CountdownSeconds % 60;
-
+			int secondsLeft = Lockdown::CountdownSeconds + 1;
+			int mins = secondsLeft / 60;
+			int secs = secondsLeft % 60;
 			if (NotifyIconAdded)
 			{
 				if (Enabled)
@@ -189,11 +193,11 @@ LRESULT CALLBACK Lockdown::MainWinProc(HWND hwnd, UINT message, WPARAM wparam, L
 						"terminate the task. The timeout duration as well as what\n"
 						"inputs should be detected may be set via command line\n"
 						"parameters. Run 'lockdown.exe -h' to view all supported\n"
-						"options. If no params entered, the timeout is %d minutes.\n"
+						"options. The current timeout is %d minutes and %d seconds.\n"
 						"By default the timer is reset on keyboard activity, mouse\n"
 						"button presses, mouse movement, gamepad button presses,\n"
 						"and gamepad axis displacement.\n",
-						LockdownVersion::Major, LockdownVersion::Minor, LockdownVersion::Revision, Lockdown::CountdownSeconds/60
+						LockdownVersion::Major, LockdownVersion::Minor, LockdownVersion::Revision, Lockdown::SecondsToLock/60, Lockdown::SecondsToLock%60
 					);
 					::MessageBox
 					(
@@ -217,7 +221,7 @@ LRESULT CALLBACK Lockdown::MainWinProc(HWND hwnd, UINT message, WPARAM wparam, L
 				}
 
 				case ID_MENU_LOCK10:
-					Enabled = 1;
+					Enabled = true;
 					CountdownSeconds = 10;
 					break;
 
@@ -238,17 +242,17 @@ LRESULT CALLBACK Lockdown::MainWinProc(HWND hwnd, UINT message, WPARAM wparam, L
 						if (result == IDOK)
 						{
 							CountdownDisabled = MaxDisabledSeconds;
-							Enabled = 0;
+							Enabled = false;
 						}
 					}
 					else
 					{
-						Enabled = 1;
+						Enabled = true;
 					}
 					break;
 
 				case ID_MENU_LOCKNOW:
-					Enabled = 1;
+					Enabled = true;
 					LockWorkStation();
 					break;
 			}
@@ -375,20 +379,18 @@ int WINAPI WinMain(HINSTANCE hinstance, HINSTANCE hprevInstance, LPSTR cmdLine, 
 	// Parse command line.
 	tCmdLine::tParse((char8_t*)cmdLine);
 
+	// Was a timeout override specified?
+	int timeoutOverride = 0;
+	if (OptionTimeoutMinutes.IsPresent())
+		timeoutOverride += 60 * OptionTimeoutMinutes.Arg1().AsInt();
+	if (OptionTimeoutSeconds.IsPresent())
+		timeoutOverride += OptionTimeoutSeconds.Arg1().AsInt();
+	if (timeoutOverride > 0)
+		Lockdown::SecondsToLock = timeoutOverride;
 	Lockdown::CountdownSeconds = Lockdown::SecondsToLock;
-	if (cmdLine && strlen(cmdLine) > 0)
-	{
-		int numMins = atoi(cmdLine);
-		if (numMins > 0)
-		{
-			Lockdown::SecondsToLock = numMins * 60;
-			Lockdown::CountdownSeconds = Lockdown::SecondsToLock;
-		}
-	}
 
 	Lockdown::hKeyboardHook		= SetWindowsHookEx(WH_KEYBOARD_LL,	Lockdown::Hook_Keyboard,	NULL, 0);
 	Lockdown::hMouseHook		= SetWindowsHookEx(WH_MOUSE_LL,		Lockdown::Hook_Mouse,		NULL, 0);
-
 	Lockdown::hInst = hinstance;
 
 	INITCOMMONCONTROLSEX comControls;
@@ -436,8 +438,11 @@ int WINAPI WinMain(HINSTANCE hinstance, HINSTANCE hprevInstance, LPSTR cmdLine, 
 			LockdownVersion::Major, LockdownVersion::Minor, LockdownVersion::Revision
 		);
 		::MessageBox(hwnd, usage.Chr(), "Lockdown CLI Usage", MB_OK | MB_ICONINFORMATION);
-		DestroyWindow(hwnd);
-		return Lockdown::ExitCode_Success;
+		if (!OptionSyntax.IsPresent())
+		{
+			DestroyWindow(hwnd);
+			return Lockdown::ExitCode_Success;
+		}
 	}
 
 	if (OptionSyntax.IsPresent())
@@ -456,9 +461,10 @@ int WINAPI WinMain(HINSTANCE hinstance, HINSTANCE hprevInstance, LPSTR cmdLine, 
 	Lockdown::NotifyIconData.uID			= IDI_LOCKDOWN_ICON;
 	Lockdown::NotifyIconData.uFlags			= NIF_ICON | NIF_MESSAGE | NIF_TIP;
 
-	int mins = Lockdown::CountdownSeconds / 60;
-	int secs = Lockdown::CountdownSeconds % 60;
-	Lockdown::Enabled = 1;
+	int secondsLeft = Lockdown::CountdownSeconds + 1;
+	int mins = secondsLeft / 60;
+	int secs = secondsLeft % 60;
+   	Lockdown::Enabled = true;
 	tsPrintf(Lockdown::NotifyIconData.szTip, sizeof(Lockdown::NotifyIconData.szTip), "Lock in %02d:%02d", mins, secs);
 
 	Lockdown::NotifyIconData.hIcon = LoadIcon(hinstance, (LPCTSTR)MAKEINTRESOURCE(IDI_LOCKDOWN_ICON));
@@ -484,7 +490,7 @@ int WINAPI WinMain(HINSTANCE hinstance, HINSTANCE hprevInstance, LPSTR cmdLine, 
 		return Lockdown::ExitCode_XInputGamepadHookFailure;
 	}
 
-	MSG msg;
+  	MSG msg;
 	while (GetMessage(&msg, NULL, 0, 0))
 	{
 		TranslateMessage(&msg);

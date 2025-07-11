@@ -5,7 +5,7 @@
 			"type": "cppvsdbg",
 			"request": "launch",
 			"program": "${command:cmake.buildDirectory}/lockdown.exe",
-			"args": ["--help", "--syntax"],
+			"args": ["--ZZhelp", "--ZZsyntax", "--minutes", "2", "--seconds", "5"],
 			"stopAtEntry": false,
 			"cwd": "${command:cmake.buildDirectory}",
 			"environment": [],
