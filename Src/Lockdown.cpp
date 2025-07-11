@@ -30,19 +30,16 @@ using namespace tMath;
 
 
 // Command-line options.
-tCmdLine::tOption OptionHelp			("Display help and usage screen.",	"help",		'h'			);
-tCmdLine::tOption OptionSyntax			("Display CLI syntax guide.",		"syntax",	'y'			);
-tCmdLine::tOption OptionTimeoutMinutes	("Timeout in minutes.",				"minutes",	'm',	1	);
-tCmdLine::tOption OptionTimeoutSeconds	("Timeout in seconds.",				"seconds",	's',	1	);
-
-/////////////// WIP
-tCmdLine::tOption OptionDisableDuration	("Max suspend time in minutes.",	"suspend",	'x',	1	);
-
-tCmdLine::tOption OptionPadButtons		("Detect any gamepad button input.","pad",		'p'			);
-tCmdLine::tOption OptionAxis			("Detect any gamepad axis changes.","axis",		'a'			);
-tCmdLine::tOption OptionKeyboard		("Detect any keyboard input",		"keyboard",	'k'			);
-tCmdLine::tOption OptionMouseMovement	("Detect any mouse movement.",		"movement",	'v'			);
-tCmdLine::tOption OptionMouseButton		("Detect any mouse button presses.","button",	'b'			);
+tCmdLine::tOption OptionHelp				("Display help and usage screen.",	"help",		'h'			);
+tCmdLine::tOption OptionSyntax				("Display CLI syntax guide.",		"syntax",	'y'			);
+tCmdLine::tOption OptionTimeoutMinutes		("Timeout in minutes.",				"minutes",	'm',	1	);
+tCmdLine::tOption OptionTimeoutSeconds		("Timeout in seconds.",				"seconds",	's',	1	);
+tCmdLine::tOption OptionMaxSuspendMinutes	("Max suspend time in minutes.",	"suspend",	'x',	1	);
+tCmdLine::tOption OptionPadButtons			("Detect any gamepad button input.","pad",		'p'			);
+tCmdLine::tOption OptionAxis				("Detect any gamepad axis changes.","axis",		'a'			);
+tCmdLine::tOption OptionKeyboard			("Detect any keyboard input",		"keyboard",	'k'			);
+tCmdLine::tOption OptionMouseMovement		("Detect any mouse movement.",		"movement",	'v'			);
+tCmdLine::tOption OptionMouseButton			("Detect any mouse button presses.","button",	'b'			);
 
 
 namespace Lockdown
@@ -55,9 +52,9 @@ namespace Lockdown
 
 	bool Enabled							= true;
 	int SecondsToLock						= 20 * 60;				// 20 minutes unless overridden by command line.
-	const int MaxDisabledSeconds			= 3 * 60 * 60;			// 3 hour max disable time.
+	int MaxSuspendSeconds					= 3 * 60 * 60;			// 3 hour max suspend time unless overridden by command line.
 	int CountdownSeconds					= SecondsToLock;
-	int CountdownDisabled					= MaxDisabledSeconds;
+	int CountdownSuspendSeconds				= MaxSuspendSeconds;
 	int MouseX								= 0;					// This may be negative for multiple monitors.
 	int MouseY								= 0;					// This may be negative for multiple monitors.
 	const int MouseDistanceThreshold		= 20;					// How far mouse must move to count as activity.
@@ -110,8 +107,8 @@ LRESULT CALLBACK Lockdown::MainWinProc(HWND hwnd, UINT message, WPARAM wparam, L
 			}
 			else
 			{
-				CountdownDisabled--;
-				if (CountdownDisabled <= 0)
+				CountdownSuspendSeconds--;
+				if (CountdownSuspendSeconds <= 0)
 					Enabled = true;
 			}
 
@@ -233,15 +230,15 @@ LRESULT CALLBACK Lockdown::MainWinProc(HWND hwnd, UINT message, WPARAM wparam, L
 						tsPrintf
 						(
 							message,
-							"Please confirm you want to disable lockdown.\n\n"
-							"OK will disable auto locking for %d hours %d minutes.\n"
+							"Please confirm you want to suspend lockdown.\n\n"
+							"OK will suspend auto-locking for %d hours %d minutes.\n"
 							"Cancel will leave lockdown enabled.\n\n",
-							MaxDisabledSeconds / 3600, (MaxDisabledSeconds % 3600) / 60
+							MaxSuspendSeconds / 3600, (MaxSuspendSeconds % 3600) / 60
 						);
-						int result = ::MessageBox(hwnd, message.Chr(), "Disable Lockdown?", MB_OKCANCEL | MB_ICONQUESTION);
+						int result = ::MessageBox(hwnd, message.Chr(), "Suspend Lockdown?", MB_OKCANCEL | MB_ICONQUESTION);
 						if (result == IDOK)
 						{
-							CountdownDisabled = MaxDisabledSeconds;
+							CountdownSuspendSeconds = MaxSuspendSeconds;
 							Enabled = false;
 						}
 					}
@@ -388,6 +385,13 @@ int WINAPI WinMain(HINSTANCE hinstance, HINSTANCE hprevInstance, LPSTR cmdLine, 
 	if (timeoutOverride > 0)
 		Lockdown::SecondsToLock = timeoutOverride;
 	Lockdown::CountdownSeconds = Lockdown::SecondsToLock;
+
+	int suspendOverride = 0;
+	if (OptionMaxSuspendMinutes.IsPresent())
+		suspendOverride = 60 * OptionMaxSuspendMinutes.Arg1().AsInt();
+	if (suspendOverride > 0)
+		Lockdown::MaxSuspendSeconds = suspendOverride;
+	Lockdown::CountdownSuspendSeconds = Lockdown::MaxSuspendSeconds;
 
 	Lockdown::hKeyboardHook		= SetWindowsHookEx(WH_KEYBOARD_LL,	Lockdown::Hook_Keyboard,	NULL, 0);
 	Lockdown::hMouseHook		= SetWindowsHookEx(WH_MOUSE_LL,		Lockdown::Hook_Mouse,		NULL, 0);
