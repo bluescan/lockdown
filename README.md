@@ -17,7 +17,7 @@ Consider running as a scheduled task on logon.
 
 There are various command line parameters to control what inputs are monitored and to set timeout durations. To view the available options type lockdown.exe -h. The default timeout is 20 minutes. The countdown resets on key-presses, mouse button clicks, mouse movement beyond a reasonable threshold, gamepad button presses, and gamepad joystick/trigger input.
 
-![Lockdown](https://raw.githubusercontent.com/bluescan/lockdown/master/Screenshots/LockdownTaskActions.png
+![Lockdown](https://raw.githubusercontent.com/bluescan/lockdown/master/Screenshots/LockdownTaskActions.png)
 
 Do not terminate the task.
 
