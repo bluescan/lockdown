@@ -330,6 +330,7 @@ void Lockdown::Hook_GamepadButton(std::shared_ptr<gamepad::device> dev)
 	);
 
 	// Any button press on any gamepad resets the countdown.
+	// @todo Test that LB RB bumper buttons reset.
 	// @todo Ideally this write would be mutex protected.
 	CountdownSeconds = SecondsToLock;
 };
@@ -349,6 +350,7 @@ void Lockdown::Hook_GamepadAxis(std::shared_ptr<gamepad::device> dev)
 	// them. We can simply reset the countdown on any axis event -- regardless of which
 	// gamepad or the particular axis.
 
+	// @todo Test that LT RT triggers reset.
 	// @todo Ideally this write would be mutex protected.
 	CountdownSeconds = SecondsToLock;
 };
