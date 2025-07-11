@@ -35,11 +35,11 @@ tCmdLine::tOption OptionSyntax				("Display CLI syntax guide.",		"syntax",	'y'		
 tCmdLine::tOption OptionTimeoutMinutes		("Timeout in minutes.",				"minutes",	'm',	1	);
 tCmdLine::tOption OptionTimeoutSeconds		("Timeout in seconds.",				"seconds",	's',	1	);
 tCmdLine::tOption OptionMaxSuspendMinutes	("Max suspend time in minutes.",	"suspend",	'x',	1	);
-tCmdLine::tOption OptionPadButtons			("Detect any gamepad button input.","pad",		'p'			);
-tCmdLine::tOption OptionAxis				("Detect any gamepad axis changes.","axis",		'a'			);
 tCmdLine::tOption OptionKeyboard			("Detect any keyboard input",		"keyboard",	'k'			);
 tCmdLine::tOption OptionMouseMovement		("Detect any mouse movement.",		"movement",	'v'			);
 tCmdLine::tOption OptionMouseButton			("Detect any mouse button presses.","button",	'b'			);
+tCmdLine::tOption OptionPadButtons			("Detect any gamepad button input.","pad",		'p'			);
+tCmdLine::tOption OptionAxis				("Detect any gamepad axis changes.","axis",		'a'			);
 
 
 namespace Lockdown
@@ -187,10 +187,13 @@ LRESULT CALLBACK Lockdown::MainWinProc(HWND hwnd, UINT message, WPARAM wparam, L
 						"specified duration without user input.\n"
 						"\n"
 						"Consider running as a scheduled task on logon. Do not\n"
-						"terminate the task. The timeout duration as well as what\n"
-						"inputs should be detected may be set via command line\n"
-						"parameters. Run 'lockdown.exe -h' to view all supported\n"
-						"options. The current timeout is %d minutes and %d seconds.\n"
+						"terminate the task.\n"
+						"\n"
+						"The timeout duration as well as what inputs should be\n"
+						"detected may be set via command line parameters. Run\n"
+						"'lockdown.exe -h' to view all supported options.\n"
+						"\n"
+						"The current timeout is %d minutes and %d seconds.\n"
 						"By default the timer is reset on keyboard activity, mouse\n"
 						"button presses, mouse movement, gamepad button presses,\n"
 						"and gamepad axis displacement.\n",
@@ -208,7 +211,7 @@ LRESULT CALLBACK Lockdown::MainWinProc(HWND hwnd, UINT message, WPARAM wparam, L
 					int result = ::MessageBox
 					(
 						hwnd,
-						"If you quit the Lockdown app your computer will not automatically lock.\n\n"
+						"If you quit the Lockdown app your computer may not automatically lock.\n\n"
 						"Are you sure you want to quit?",
 						"Quit Lockdown", MB_YESNO | MB_ICONEXCLAMATION
 					);
@@ -281,9 +284,12 @@ LRESULT CALLBACK Lockdown::Hook_Mouse(int code, WPARAM wparam, LPARAM lparam)
 	MSLLHOOKSTRUCT* mouseStruct = (MSLLHOOKSTRUCT*)lparam;
 	if
 	(
-		(wparam == WM_LBUTTONDOWN) || (wparam == WM_LBUTTONUP) ||
-		(wparam == WM_RBUTTONDOWN) || (wparam == WM_RBUTTONUP) ||
-		(wparam == WM_MOUSEWHEEL)
+		OptionMouseButton.IsPresent() &&
+		(
+			(wparam == WM_LBUTTONDOWN) || (wparam == WM_LBUTTONUP) ||
+			(wparam == WM_RBUTTONDOWN) || (wparam == WM_RBUTTONUP) ||
+			(wparam == WM_MOUSEWHEEL)
+		)
 	)
 	{
 		CountdownSeconds = SecondsToLock;
@@ -291,7 +297,10 @@ LRESULT CALLBACK Lockdown::Hook_Mouse(int code, WPARAM wparam, LPARAM lparam)
 
 	if
 	(
-		(wparam == WM_MOUSEMOVE) || (wparam == WM_NCMOUSEMOVE)
+		OptionMouseMovement.IsPresent() &&
+		(
+			(wparam == WM_MOUSEMOVE) || (wparam == WM_NCMOUSEMOVE)
+		)
 	)
 	{
 		tVector2 prevPos{float(MouseX), float(MouseY)};
@@ -307,7 +316,7 @@ LRESULT CALLBACK Lockdown::Hook_Mouse(int code, WPARAM wparam, LPARAM lparam)
 		}
 	}
 
-	return CallNextHookEx(hKeyboardHook, code, wparam, lparam);
+	return CallNextHookEx(hMouseHook, code, wparam, lparam);
 }
 
 
@@ -374,7 +383,7 @@ int WINAPI WinMain(HINSTANCE hinstance, HINSTANCE hprevInstance, LPSTR cmdLine, 
 	tSystem::tSetSupplementaryDebuggerOutput();
 
 	// Parse command line.
-	tCmdLine::tParse((char8_t*)cmdLine);
+	tCmdLine::tParse((char8_t*)cmdLine, false, false);
 
 	// Was a timeout override specified?
 	int timeoutOverride = 0;
@@ -393,8 +402,25 @@ int WINAPI WinMain(HINSTANCE hinstance, HINSTANCE hprevInstance, LPSTR cmdLine, 
 		Lockdown::MaxSuspendSeconds = suspendOverride;
 	Lockdown::CountdownSuspendSeconds = Lockdown::MaxSuspendSeconds;
 
-	Lockdown::hKeyboardHook		= SetWindowsHookEx(WH_KEYBOARD_LL,	Lockdown::Hook_Keyboard,	NULL, 0);
-	Lockdown::hMouseHook		= SetWindowsHookEx(WH_MOUSE_LL,		Lockdown::Hook_Mouse,		NULL, 0);
+	if
+	(
+		!OptionKeyboard.IsPresent()		&& !OptionMouseMovement.IsPresent()		&& !OptionMouseButton.IsPresent() &&
+		!OptionPadButtons.IsPresent()	&& !OptionAxis.IsPresent()
+	)
+	{
+		OptionKeyboard.Present = true;
+		OptionMouseMovement.Present = true;
+		OptionMouseButton.Present = true;
+		OptionPadButtons.Present = true;
+		OptionAxis.Present = true;
+	}
+
+	if (OptionKeyboard.IsPresent())
+		Lockdown::hKeyboardHook	= SetWindowsHookEx(WH_KEYBOARD_LL,	Lockdown::Hook_Keyboard,	NULL, 0);
+
+	if (OptionMouseMovement.IsPresent() || OptionMouseButton.IsPresent())
+		Lockdown::hMouseHook	= SetWindowsHookEx(WH_MOUSE_LL,		Lockdown::Hook_Mouse,		NULL, 0);
+
 	Lockdown::hInst = hinstance;
 
 	INITCOMMONCONTROLSEX comControls;
@@ -438,7 +464,10 @@ int WINAPI WinMain(HINSTANCE hinstance, HINSTANCE hprevInstance, LPSTR cmdLine, 
 		tCmdLine::tStringUsageNI
 		(
 			usage, u8"Tristan Grimmer",
-			u8"Lockdown is a system-tray program that locks the computer after a period of inactivity.",
+			u8""
+			"Lockdown is a system-tray program that locks the computer after a period of "
+			"inactivity. It can monitor user input from keyboard, mouse, and gamepads. If no "
+			"inputs are specified on the command line (-kvbpa), all inputs are monitored.",
 			LockdownVersion::Major, LockdownVersion::Minor, LockdownVersion::Revision
 		);
 		::MessageBox(hwnd, usage.Chr(), "Lockdown CLI Usage", MB_OK | MB_ICONINFORMATION);
@@ -479,19 +508,24 @@ int WINAPI WinMain(HINSTANCE hinstance, HINSTANCE hprevInstance, LPSTR cmdLine, 
 	SetTimer(hwnd, 42, 1000, NULL);
 
 	// Hook into gamepad/controller events.
-	auto hook = gamepad::hook::make();
-	hook->set_plug_and_play(true, gamepad::ms(1000));
-	hook->set_sleep_time(gamepad::ms(100)); // 10fps poll.
-	hook->set_button_event_handler(Lockdown::Hook_GamepadButton);
-	hook->set_axis_event_handler(Lockdown::Hook_GamepadAxis);
-	hook->set_connect_event_handler(Lockdown::Hook_GamepadConnect);
-	hook->set_disconnect_event_handler(Lockdown::Hook_GamepadDisconnect);
-
-	if (!hook->start())
+	if (OptionPadButtons.IsPresent() || OptionAxis.IsPresent())
 	{
-		tdPrintf("Couldn't start gamepad hook.\n");
-		DestroyWindow(hwnd);
-		return Lockdown::ExitCode_XInputGamepadHookFailure;
+		auto hook = gamepad::hook::make();
+		hook->set_plug_and_play(true, gamepad::ms(1000));
+		hook->set_sleep_time(gamepad::ms(100)); // 10fps poll.
+		if (OptionPadButtons.IsPresent())
+			hook->set_button_event_handler(Lockdown::Hook_GamepadButton);
+		if (OptionAxis.IsPresent())
+			hook->set_axis_event_handler(Lockdown::Hook_GamepadAxis);
+		hook->set_connect_event_handler(Lockdown::Hook_GamepadConnect);
+		hook->set_disconnect_event_handler(Lockdown::Hook_GamepadDisconnect);
+
+		if (!hook->start())
+		{
+			tdPrintf("Couldn't start gamepad hook.\n");
+			DestroyWindow(hwnd);
+			return Lockdown::ExitCode_XInputGamepadHookFailure;
+		}
 	}
 
   	MSG msg;
